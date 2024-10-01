@@ -5,16 +5,18 @@ const gymController = require('../controllers/gymController');
 const mysql = require('mysql');
 const nodemailer = require('nodemailer');
 
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, 'uploads/');
   },
   filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
+    cb(null, `${Date.now()}-${file.originalname}`);
   },
 });
 
 const upload = multer({ storage: storage });
+
 
 const db = mysql.createConnection({
   host: 'localhost',
@@ -22,6 +24,7 @@ const db = mysql.createConnection({
   password: '',
   database: 'dbmartialpro',
 });
+
 
 db.connect((err) => {
   if (err) {
@@ -31,13 +34,13 @@ db.connect((err) => {
   console.log('Connected to the database');
 });
 
-// Submit gym registration
+
 router.post('/submit', upload.fields([
   { name: 'gymPics', maxCount: 5 },
   { name: 'businessPermit', maxCount: 1 },
 ]), gymController.submitGymRegistration);
 
-// Get all registrations
+
 router.get('/registrations', (req, res) => {
   const query = 'SELECT * FROM gym_registration';
   db.query(query, (err, results) => {
@@ -49,38 +52,40 @@ router.get('/registrations', (req, res) => {
   });
 });
 
-// Get a single registration by ID
-router.get("/registrations/:id", (req, res) => {
+
+router.get('/registrations/:id', (req, res) => {
   const id = req.params.id;
-  const query = "SELECT * FROM gym_registration WHERE id = ?";
+  const query = 'SELECT * FROM gym_registration WHERE id = ?';
   db.query(query, [id], (err, results) => {
     if (err) {
-      console.error("Error fetching registration:", err.message);
-      return res.status(500).json({ message: "Database Error", error: err.message });
+      console.error('Error fetching registration:', err.message);
+      return res.status(500).json({ message: 'Database Error', error: err.message });
     }
     if (results.length === 0) {
-      return res.status(404).json({ message: "Registration not found" });
+      return res.status(404).json({ message: 'Registration not found' });
     }
     res.status(200).json(results[0]);
   });
 });
 
-// Fetch tbl_gymusers
-router.get('/UsersPage', (req, res) => { 
+
+router.get('/UsersPage', (req, res) => {
   const { role, orderBy } = req.query;
   let query = 'SELECT * FROM tbl_gymusers';
+  const queryParams = [];
+
   
-  // Role
   if (role) {
     query += ' WHERE role = ?';
+    queryParams.push(role);
   }
 
-  // Sorting
+  
   if (orderBy) {
     query += ` ORDER BY ${mysql.escapeId(orderBy)}`;
   }
 
-  db.query(query, role ? [role] : [], (err, results) => {
+  db.query(query, queryParams, (err, results) => {
     if (err) {
       console.error('Error fetching users:', err.message);
       return res.status(500).json({ message: 'Database Error', error: err.message });
@@ -89,43 +94,43 @@ router.get('/UsersPage', (req, res) => {
   });
 });
 
-// Update registration status
-router.put("/registrations/:id/status_reg", (req, res) => {
-  const id = req.params.id;
-  const { status } = req.body; // Status should be 1 for ACCEPT and 0 for REJECT
 
-  const query = "UPDATE gym_registration SET status_reg = ? WHERE id = ?";
+router.put('/registrations/:id/status_reg', (req, res) => {
+  const id = req.params.id;
+  const { status } = req.body; 
+
+  const query = 'UPDATE gym_registration SET status_reg = ? WHERE id = ?';
   db.query(query, [status, id], (err, results) => {
     if (err) {
-      console.error("Error updating status:", err.message);
-      return res.status(500).json({ message: "Database Error", error: err.message });
+      console.error('Error updating status:', err.message);
+      return res.status(500).json({ message: 'Database Error', error: err.message });
     }
 
     if (results.affectedRows === 0) {
-      return res.status(404).json({ message: "Registration not found" });
+      return res.status(404).json({ message: 'Registration not found' });
     }
 
-    res.status(200).json({ message: "Status updated successfully" });
+    res.status(200).json({ message: 'Status updated successfully' });
   });
 });
 
-// Email Sending Functionality
+
 router.post('/send-email', (req, res) => {
   const { to, subject, html } = req.body;
 
   const transporter = nodemailer.createTransport({
     service: 'Gmail',
     auth: {
-      user: 'your-email@gmail.com', // Your email
-      pass: 'your-email-password' // Your email password or app password
-    }
+      user: 'your-email@gmail.com', 
+      pass: 'your-email-password', 
+    },
   });
 
   const mailOptions = {
-    from: 'your-email@gmail.com', // Sender's email
+    from: 'your-email@gmail.com', 
     to,
     subject,
-    html
+    html,
   };
 
   transporter.sendMail(mailOptions, (error, info) => {
@@ -137,88 +142,93 @@ router.post('/send-email', (req, res) => {
   });
 });
 
-// New Route for Sending OTP
+
 router.post('/send-otp', async (req, res) => {
   const { email } = req.body;
 
-  // Generate a 6-digit OTP
+  
   const otp = Math.floor(100000 + Math.random() * 900000);
-  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiration
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000); 
 
-  // Store OTP in tbl_otp
+  
   const query = 'INSERT INTO tbl_otp (email, otp, expires_at) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE otp = ?, expires_at = ?';
   db.query(query, [email, otp, expiresAt, otp, expiresAt], (err) => {
     if (err) {
-      console.error("Error saving OTP:", err.message);
-      return res.status(500).json({ message: "Database Error", error: err.message });
+      console.error('Error saving OTP:', err.message);
+      return res.status(500).json({ message: 'Database Error', error: err.message });
     }
   });
 
-  // Create email content for OTP
+  
   const mailOptions = {
-    from: "chiyokogaming02@gmail.com",
+    from: 'chiyokogaming02@gmail.com',
     to: email,
-    subject: "Your OTP Code",
+    subject: 'Your OTP Code',
     html: `<p>Your OTP code is <strong>${otp}</strong>. It is valid for 5 minutes.</p>`,
   };
 
   try {
-    // Send OTP email
+    
     const transporter = nodemailer.createTransport({
-      service: "gmail",
+      service: 'gmail',
       auth: {
-        user: "chiyokogaming02@gmail.com",
-        pass: "lzyptlunqcpjkxla",
+        user: 'chiyokogaming02@gmail.com',
+        pass: 'lzyptlunqcpjkxla',
       },
     });
 
     await transporter.sendMail(mailOptions);
-    res.status(200).json({ message: "OTP sent successfully", success: true });
+    res.status(200).json({ message: 'OTP sent successfully', success: true });
   } catch (error) {
-    console.error("Error sending OTP:", error);
-    res.status(500).json({ error: "Failed to send OTP", success: false });
+    console.error('Error sending OTP:', error);
+    res.status(500).json({ error: 'Failed to send OTP', success: false });
   }
 });
 
-// New Route for Verifying OTP
-router.post('/verify-otp', async (req, res) => {
+
+router.post('/verify-otp', (req, res) => {
   const { email, otp } = req.body;
 
   const query = 'SELECT * FROM tbl_otp WHERE email = ? AND otp = ?';
   db.query(query, [email, otp], (err, results) => {
     if (err) {
-      console.error("Error verifying OTP:", err.message);
-      return res.status(500).json({ message: "Database Error", error: err.message });
-    }
-    
-    if (results.length === 0 || new Date() > results[0].expires_at) {
-      return res.status(400).json({ message: "Invalid or expired OTP" });
+      console.error('Error verifying OTP:', err.message);
+      return res.status(500).json({ message: 'Database Error', error: err.message });
     }
 
-    // OTP is valid, delete it from tbl_otp
+    if (results.length === 0 || new Date() > results[0].expires_at) {
+      return res.status(400).json({ message: 'Invalid or expired OTP' });
+    }
+
+    
     const deleteQuery = 'DELETE FROM tbl_otp WHERE email = ?';
     db.query(deleteQuery, [email], (err) => {
       if (err) {
-        console.error("Error deleting OTP:", err.message);
+        console.error('Error deleting OTP:', err.message);
       }
     });
 
-    return res.status(200).json({ message: "OTP verified successfully" });
+    return res.status(200).json({ message: 'OTP verified successfully' });
   });
 });
 
-// New Route for Final Registration
-router.post('/register', (req, res) => {
-  const { fname, lname, email, password } = req.body;
 
-  // Insert new user into tbl_gymusers
-  const query = 'INSERT INTO tbl_gymusers (fname, lname, email, password) VALUES (?, ?, ?, ?)';
-  db.query(query, [fname, lname, email, password], (err) => {
+router.post('/register', (req, res) => {
+  const { fname, lname, email, password, role = 'user' } = req.body; 
+
+  
+  if (!fname || !lname || !email || !password) {
+    return res.status(400).json({ message: 'All fields are required' });
+  }
+
+  
+  const query = 'INSERT INTO tbl_gymusers (fname, lname, email, password, role) VALUES (?, ?, ?, ?, ?)';
+  db.query(query, [fname, lname, email, password, role], (err, result) => {
     if (err) {
-      console.error("Error saving gym user:", err.message);
-      return res.status(500).json({ message: "Database Error", error: err.message });
+      console.error('Database error:', err);
+      return res.status(500).json({ message: 'Database error', error: err.message });
     }
-    res.status(201).json({ message: "Registration successful" });
+    res.status(200).json({ message: 'User registered successfully' });
   });
 });
 

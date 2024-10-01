@@ -7,26 +7,28 @@ function GymOwnerAccountRegistration() {
     lname: "",
     email: "",
     password: "",
+    role: "", 
   });
   const [otp, setOtp] = useState("");
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [timer, setTimer] = useState(300); // 5 minutes countdown
+  const [timer, setTimer] = useState(100);
+  const [loading, setLoading] = useState(false);
 
-  // Handle input change for the registration form
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormValues((prev) => ({
       ...prev,
       [name]: value,
     }));
+    setError("");
   };
 
-  // Handle sending OTP to the user's email
   const handleSendOtp = async () => {
     setError("");
+    setLoading(true);
     try {
       const response = await axios.post("http://localhost:5000/api/send-otp", {
         email: formValues.email,
@@ -34,16 +36,19 @@ function GymOwnerAccountRegistration() {
 
       if (response.data.success) {
         setIsOtpSent(true);
-        setTimer(300); // Reset timer to 5 minutes (300 seconds)
+        setTimer(100);
+        alert("OTP sent successfully!");
       } else {
         setError("Failed to send OTP.");
+        alert("Failed to send OTP.");
       }
     } catch (err) {
       setError("Error occurred while sending OTP.");
+      alert("Error occurred while sending OTP.");
     }
+    setLoading(false);
   };
 
-  // Handle OTP countdown timer
   useEffect(() => {
     let interval;
     if (isOtpSent && timer > 0) {
@@ -53,14 +58,15 @@ function GymOwnerAccountRegistration() {
     }
     if (timer === 0) {
       setError("OTP expired. Please request a new OTP.");
+      alert("OTP expired. Please request a new OTP.");
       setIsOtpSent(false);
       setOtp("");
     }
     return () => clearInterval(interval);
   }, [isOtpSent, timer]);
 
-  // Handle verifying the OTP entered by the user
   const handleVerifyOtp = async () => {
+    setLoading(true);
     try {
       const response = await axios.post("http://localhost:5000/api/verify-otp", {
         email: formValues.email,
@@ -70,33 +76,65 @@ function GymOwnerAccountRegistration() {
       if (response.data.success) {
         setOtpVerified(true);
         setError("");
-
-        // Optionally save the OTP if needed
-        await axios.post("http://localhost:5000/api/save-otp", {
-          email: formValues.email,
-          otp: otp,
-        });
+        alert("OTP verified successfully!");
       } else {
         setError("Invalid or expired OTP.");
+        alert("Invalid or expired OTP.");
       }
     } catch (err) {
       setError("Error occurred while verifying OTP.");
+      alert("Error occurred while verifying OTP.");
     }
+    setLoading(false);
   };
 
-  // Handle final registration after OTP verification
   const handleFinalRegistration = async () => {
-    try {
-      const response = await axios.post("http://localhost:5000/api/register", formValues);
-
-      if (response.data.success) {
-        setSuccessMessage("Registration successful!");
-      } else {
-        setError("Registration failed. Please try again.");
-      }
-    } catch (err) {
-      setError("Error occurred while registering.");
+    if (!otpVerified) {
+      setError("Please verify your OTP before registering.");
+      alert("Please verify your OTP before registering.");
+      return;
     }
+
+    setLoading(true);
+    try {
+      
+      console.log("Form Values Before Sending: ", formValues);
+
+      const response = await fetch('http://localhost:5000/api/gymusers/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fname: formValues.fname,
+          lname: formValues.lname,
+          email: formValues.email,
+          password: formValues.password,
+          otp: otp,
+          role: formValues.role, 
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Network response was not ok');
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        setSuccessMessage("Registration successful!");
+        setError("");
+        alert("Registration successful!");
+      } else {
+        setError(data.message || "Registration failed.");
+        alert(data.message || "Registration failed.");
+      }
+    } catch (error) {
+      console.error('Error occurred while registering:', error);
+      setError(`Error occurred while registering: ${error.message}`);
+      alert(`Error occurred while registering: ${error.message}`);
+    }
+    setLoading(false);
   };
 
   return (
@@ -105,7 +143,7 @@ function GymOwnerAccountRegistration() {
         <h1 className="text-2xl font-bold text-center mb-6">Gym Owner Registration</h1>
 
         <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
-          {/* First Name */}
+          
           <div className="flex flex-col">
             <label className="font-medium">First Name</label>
             <input
@@ -118,7 +156,6 @@ function GymOwnerAccountRegistration() {
             />
           </div>
 
-          {/* Last Name */}
           <div className="flex flex-col">
             <label className="font-medium">Last Name</label>
             <input
@@ -131,7 +168,6 @@ function GymOwnerAccountRegistration() {
             />
           </div>
 
-          {/* Email */}
           <div className="flex flex-col">
             <label className="font-medium">Email</label>
             <input
@@ -144,7 +180,6 @@ function GymOwnerAccountRegistration() {
             />
           </div>
 
-          {/* Password */}
           <div className="flex flex-col">
             <label className="font-medium">Password</label>
             <input
@@ -157,14 +192,32 @@ function GymOwnerAccountRegistration() {
             />
           </div>
 
-          {/* OTP Sending and Verification */}
+          <div className="flex flex-col">
+            <label className="font-medium">Role</label>
+            <select
+              name="role"
+              value={formValues.role}
+              onChange={handleInputChange}
+              className="p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            >
+              <option value="">Select Role</option>
+              <option value="Member">Member</option>
+              <option value="Owner">Owner</option>
+              <option value="Coach">Coach</option>
+            </select>
+          </div>
+
           {!isOtpSent ? (
             <button
               type="button"
               onClick={handleSendOtp}
-              className="bg-blue-500 text-white p-3 rounded-md mt-4 w-full hover:bg-blue-600 transition duration-200"
+              className={`${
+                loading ? "bg-blue-300" : "bg-blue-500"
+              } text-white p-3 rounded-md mt-4 w-full hover:bg-blue-600 transition duration-200`}
+              disabled={loading}
             >
-              Send OTP
+              {loading ? "Sending OTP..." : "Send OTP"}
             </button>
           ) : !otpVerified ? (
             <div className="flex flex-col mt-4">
@@ -177,11 +230,14 @@ function GymOwnerAccountRegistration() {
                 required
               />
               <button
-                type="button" // Ensure this is set to "button" to avoid form submission
+                type="button" 
                 onClick={handleVerifyOtp}
-                className="bg-green-500 text-white p-3 rounded-md mt-4 w-full hover:bg-green-600 transition duration-200"
+                className={`${
+                  loading ? "bg-green-300" : "bg-green-500"
+                } text-white p-3 rounded-md mt-4 w-full hover:bg-green-600 transition duration-200`}
+                disabled={loading} 
               >
-                Verify OTP
+                {loading ? "Verifying OTP..." : "Verify OTP"}
               </button>
               <p className="text-sm text-gray-600 mt-2">
                 OTP expires in: {Math.floor(timer / 60)}:{timer % 60 < 10 ? `0${timer % 60}` : timer % 60} minutes
@@ -193,17 +249,19 @@ function GymOwnerAccountRegistration() {
               <button
                 type="button"
                 onClick={handleFinalRegistration}
-                className="bg-purple-500 text-white p-3 rounded-md mt-4 w-full hover:bg-purple-600 transition duration-200"
+                className={`${
+                  loading ? "bg-blue-300" : "bg-blue-500"
+                } text-white p-3 rounded-md mt-4 w-full hover:bg-blue-600 transition duration-200`}
+                disabled={loading}
               >
-                Register Now
+                {loading ? "Registering..." : "Register Now"}
               </button>
             </div>
           )}
-        </form>
 
-        {/* Error and Success Messages */}
-        {error && <p className="text-red-500 mt-4 text-center">{error}</p>}
-        {successMessage && <p className="text-green-500 mt-4 text-center">{successMessage}</p>}
+          {error && <p className="text-red-500 text-center mt-4">{error}</p>}
+          {successMessage && <p className="text-green-500 text-center mt-4">{successMessage}</p>}
+        </form>
       </div>
     </div>
   );
